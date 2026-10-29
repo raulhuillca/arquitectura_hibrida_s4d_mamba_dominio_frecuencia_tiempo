@@ -417,5 +417,207 @@ python nids_model.py --input CIC_IDS2017_dl_split.npz --model cnn_lstm
 
 # Ejecutar ambos modelos para comparar
 python nids_model.py --input NSL_KDD_dl_split.npz --model both
+```
+
+"""
+NIDS Deep Learning Model - Autoencoder + CNN-LSTM
+Consume directamente los archivos *_dl_split.npz generados por nids_downloader.py
+
+Arquitecturas:
+1. Autoencoder (Anomalía) - Detecta zero-day
+2. CNN + LSTM (Supervisado) - Clasifica el tipo de ataque
+"""
+
+import argparse
+import numpy as np
+import os
+
+# Configuración de TensorFlow
+try:
+    import tensorflow as tf
+    from tensorflow.keras.models import Model, Sequential
+    from tensorflow.keras.layers import Dense, Input, LSTM, Conv1D, MaxPooling1D, Dropout, BatchNormalization, Reshape, Flatten
+    from tensorflow.keras.callbacks import EarlyStopping
+    HAS_TF = True
+except ImportError:
+    HAS_TF = False
+    print("[!] Instala tensorflow: pip install tensorflow")
+
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
+import matplotlib.pyplot as plt
+
+def load_npz(path):
+    print(f"[+] Cargando {path}")
+    data = np.load(path)
+    X_train, X_test = data['X_train'], data['X_test']
+    y_train, y_test = data['y_train'], data['y_test']
+    print(f"X_train: {X_train.shape}, y_test: {np.bincount(y_test)} | %Ataque test: {y_test.mean()*100:.1f}%")
+    return X_train, X_test, y_train, y_test
+
+# ================== MODELO 1: AUTOENCODER ==================
+def build_autoencoder(input_dim):
+    print(f"\n[>>] Construyendo Autoencoder input_dim={input_dim}")
+    # Encoder
+    inp = Input(shape=(input_dim,))
+    x = Dense(64, activation='relu')(inp)
+    x = BatchNormalization()(x)
+    x = Dense(32, activation='relu')(x)
+    x = Dense(16, activation='relu')(x) # Cuello de botella - aprende la esencia de "normal"
+    
+    # Decoder
+    x = Dense(32, activation='relu')(x)
+    x = Dense(64, activation='relu')(x)
+    out = Dense(input_dim, activation='linear')(x)
+
+    autoencoder = Model(inp, out)
+    autoencoder.compile(optimizer='adam', loss='mse')
+    autoencoder.summary()
+    return autoencoder
+
+def train_autoencoder(X_train, y_train, X_test, y_test):
+    # DIDÁCTICO: Entrenamos SOLO con tráfico normal
+    X_normal = X_train[y_train == 0]
+    print(f"\n[>>] Entrenando Autoencoder SOLO con tráfico normal: {X_normal.shape} muestras")
+    print("Idea: Si solo ve normal, cuando vea un ataque no sabrá reconstruirlo y el error será alto")
+
+    autoencoder = build_autoencoder(X_normal.shape[1])
+
+    early = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+    history = autoencoder.fit(
+        X_normal, X_normal,
+        epochs=50,
+        batch_size=256,
+        validation_split=0.1,
+        callbacks=[early],
+        verbose=1
+    )
+
+    # Evaluar: Error de reconstrucción
+    X_train_pred = autoencoder.predict(X_train, verbose=0)
+    train_mse = np.mean(np.power(X_train - X_train_pred, 2), axis=1)
+
+    # Umbral: percentil 95 del error en tráfico normal
+    normal_mse = train_mse[y_train == 0]
+    threshold = np.percentile(normal_mse, 95)
+    print(f"\n[>>] Umbral de anomalía (95 percentile normal): {threshold:.6f}")
+
+    X_test_pred = autoencoder.predict(X_test, verbose=0)
+    test_mse = np.mean(np.power(X_test - X_test_pred, 2), axis=1)
+    y_pred_anomaly = (test_mse > threshold).astype(int)
+
+    print("\n--- RESULTADO AUTOENCODER (Anomalía) ---")
+    print(classification_report(y_test, y_pred_anomaly, target_names=['Normal','Ataque']))
+    print(f"AUC-ROC: {roc_auc_score(y_test, test_mse):.4f}")
+
+    # Gráfico
+    plt.figure(figsize=(10,4))
+    plt.hist(normal_mse, bins=50, alpha=0.6, label='Normal Train')
+    plt.hist(test_mse[y_test==1], bins=50, alpha=0.6, label='Ataque Test')
+    plt.axvline(threshold, color='r', linestyle='--', label=f'Umbral {threshold:.4f}')
+    plt.legend()
+    plt.title("Distribución de Error de Reconstrucción - Autoencoder")
+    plt.xlabel("MSE")
+    plt.ylabel("Frecuencia")
+    plt.savefig("autoencoder_error_hist.png")
+    print("[OK] Gráfico guardado: autoencoder_error_hist.png")
+
+    return autoencoder
+
+# ================== MODELO 2: CNN + LSTM ==================
+def build_cnn_lstm(input_dim):
+    print(f"\n[>>] Construyendo CNN + LSTM input_dim={input_dim}")
+    # Para CNN-LSTM necesitamos forma secuencial: (timesteps, features)
+    # Truco didáctico: tratamos cada flujo como una secuencia de 1 paso, pero con ventana
+    
+    model = Sequential([
+        Input(shape=(input_dim, 1)), # (features, 1) para Conv1D
+        Conv1D(64, 3, activation='relu', padding='same'),
+        BatchNormalization(),
+        MaxPooling1D(2),
+        Conv1D(32, 3, activation='relu', padding='same'),
+        Dropout(0.3),
+        # LSTM necesita secuencia, Conv1D ya dio secuencia
+        LSTM(64, return_sequences=False),
+        Dense(32, activation='relu'),
+        Dropout(0.3),
+        Dense(1, activation='sigmoid')
+    ])
+
+    model.compile(
+        optimizer='adam', 
+        loss='binary_crossentropy', 
+        metrics=['accuracy', tf.keras.metrics.AUC(name='auc'), tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]
+    )
+    model.summary()
+    return model
+
+def train_cnn_lstm(X_train, y_train, X_test, y_test):
+    print(f"\n[>>] Entrenando CNN+LSTM Supervisado con TODO el tráfico (Normal+Ataque)")
+
+    # Reshape para CNN-LSTM: (samples, features, 1)
+    X_train_r = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
+    X_test_r = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
+
+    model = build_cnn_lstm(X_train.shape[1])
+    early = EarlyStopping(monitor='val_auc', mode='max', patience=7, restore_best_weights=True)
+
+    history = model.fit(
+        X_train_r, y_train,
+        epochs=30,
+        batch_size=256,
+        validation_split=0.2,
+        callbacks=[early],
+        verbose=1
+    )
+
+    print("\n--- RESULTADO CNN+LSTM (Supervisado) ---")
+    loss, acc, auc, prec, rec = model.evaluate(X_test_r, y_test, verbose=0)
+    print(f"Accuracy: {acc:.4f} | AUC: {auc:.4f} | Precision: {prec:.4f} | Recall: {rec:.4f}")
+
+    y_pred = (model.predict(X_test_r, verbose=0) > 0.5).astype(int)
+    print(classification_report(y_test, y_pred, target_names=['Normal','Ataque']))
+    print("Matriz de Confusión:")
+    print(confusion_matrix(y_test, y_pred))
+
+    # Guardar modelo
+    model.save("nids_cnn_lstm.h5")
+    print("[OK] Modelo guardado: nids_cnn_lstm.h5")
+
+    return model
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", type=str, required=True, help="Archivo .npz de nids_downloader.py")
+    parser.add_argument("--model", type=str, default="both", choices=["autoencoder","cnn_lstm","both"], help="Qué modelo entrenar")
+    args = parser.parse_args()
+
+    if not HAS_TF:
+        print("Instala tensorflow primero")
+        exit(1)
+
+    if not os.path.exists(args.input):
+        print(f"[!] No existe {args.input}. Primero corre nids_downloader.py")
+        print("Ejemplo: python nids_downloader.py --dataset UNSW-NB15")
+        exit(1)
+
+    X_train, X_test, y_train, y_test = load_npz(args.input)
+
+    # Normalización extra por si el CSV no venía escalado
+    from sklearn.preprocessing import StandardScaler
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_test = scaler.transform(X_test)
+
+    if args.model in ["autoencoder","both"]:
+        train_autoencoder(X_train, y_train, X_test, y_test)
+
+    if args.model in ["cnn_lstm","both"]:
+        train_cnn_lstm(X_train, y_train, X_test, y_test)
+
+    print("\n[FIN] Entrenamiento completo.")
+    print("Próximo paso para producción/proyecto:")
+    print("1. El Autoencoder es tu detector de zero-day (no necesita etiquetas de ataque)")
+    print("2. CNN-LSTM es tu clasificador de alta precisión para ataques conocidos")
+    print("3. En pipeline de producción: si el Autoencoder lanza una anomalía -> pasas a CNN-LSTM para confirmar/clasificar")
 
 
