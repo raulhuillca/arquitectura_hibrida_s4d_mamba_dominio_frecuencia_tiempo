@@ -360,8 +360,7 @@ if __name__ == "__main__":
             split_for_dl(df_clean, ds.replace("-","_"))
 
     print("\n[FIN] Todo listo. Archivos *_clean.csv listos para tu modelo Deep Learning.")
-
---
+```
 ---
 
 ### ¿Qué hace el script por dentro? (Proceso de Limpieza)
