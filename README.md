@@ -658,4 +658,232 @@ sudo python nids_realtime.py --model nids_cnn_lstm.h5 --iface wlan0
 # Windows (Abrir CMD/PowerShell como Administrador)
 python nids_realtime.py --model nids_cnn_lstm.h5 --iface "Wi-Fi"
 
+"""
+NIDS Realtime - Captura tráfico vivo y lo clasifica con tu modelo entrenado
+Consume: nids_cnn_lstm.h5 + scaler del entrenamiento
+Requiere: pip install scapy tensorflow pandas scikit-learn
 
+Este script es educativo. Para producción real usa Zeek + Kafka.
+"""
+
+import argparse
+import time
+import threading
+from collections import deque, defaultdict
+import numpy as np
+import pandas as pd
+
+# Intentar importar dependencias críticas
+try:
+    import tensorflow as tf
+    HAS_TF = True
+except ImportError:
+    HAS_TF = False
+
+try:
+    from scapy.all import sniff, IP, TCP, UDP
+    HAS_SCAPY = True
+except ImportError:
+    HAS_SCAPY = False
+    print("[!] Instala scapy: pip install scapy")
+
+# --- Configuración didáctica ---
+# Features simplificadas que extraemos en vivo y mapeamos a las 40+ del modelo
+# En un NIDS real usarías CICFlowMeter. Aquí hacemos una versión ligera.
+
+class FlowStats:
+    def __init__(self):
+        self.packets = 0
+        self.bytes = 0
+        self.start_time = time.time()
+        self.last_time = time.time()
+        self.tcp_flags = []
+        self.ports = set()
+
+    def update(self, pkt_len, dport, flags=""):
+        self.packets += 1
+        self.bytes += pkt_len
+        self.last_time = time.time()
+        self.ports.add(dport)
+        if flags:
+            self.tcp_flags.append(flags)
+
+    def to_features(self):
+        duration = max(self.last_time - self.start_time, 0.001)
+        pkt_rate = self.packets / duration
+        byte_rate = self.bytes / duration
+        # Features muy simplificadas pero con la misma idea subyacente
+        return {
+            "duration": duration,
+            "src_bytes": self.bytes,
+            "count": self.packets,
+            "srv_count": len(self.ports),
+            "serror_rate": self.tcp_flags.count("S") / max(len(self.tcp_flags), 1),
+            "pkt_rate": pkt_rate,
+            "byte_rate": byte_rate
+        }
+
+# Almacenamiento de flujos temporales: key = (src_ip, dst_ip, dst_port)
+flows = defaultdict(FlowStats)
+alert_history = deque(maxlen=100)
+
+# Variables globales del modelo
+model = None
+scaler = None
+threshold = 0.7
+
+def load_model(model_path):
+    global model
+    if not HAS_TF:
+        print("[!] Tensorflow no instalado, iniciando en modo simulación (heurística)")
+        return None
+    print(f"[+] Cargando modelo {model_path}")
+    m = tf.keras.models.load_model(model_path)
+    print("[OK] Modelo cargado con éxito")
+    m.summary()
+    return m
+
+def extract_simple_vector(flow: FlowStats, expected_dim=41):
+    """
+    Mapea nuestras 7 features en vivo a un vector del tamaño que espera el modelo.
+    Rellena el resto con ceros (Padding).
+    """
+    f = flow.to_features()
+    # Vector base con las features que sí extraemos en tiempo real
+    base = [
+        f["duration"],
+        f["src_bytes"],
+        f["count"],
+        f["srv_count"],
+        f["serror_rate"],
+        f["pkt_rate"],
+        f["byte_rate"],
+    ]
+    
+    vec = np.zeros(expected_dim)
+    for i, v in enumerate(base):
+        if i < expected_dim:
+            # log1p para evitar valores extremos y estabilizar la inferencia
+            vec[i] = np.log1p(v) 
+
+    # Normalización simplificada (0-1 aproximado)
+    vec = np.clip(vec / 10.0, 0, 1)
+    return vec
+
+def packet_callback(pkt):
+    # Filtrar solo tráfico IP
+    if not pkt.haslayer(IP):
+        return
+    try:
+        ip = pkt[IP]
+        dport = 0
+        flags = ""
+        
+        if pkt.haslayer(TCP):
+            dport = pkt[TCP].dport
+            flags = pkt[TCP].flags
+        elif pkt.haslayer(UDP):
+            dport = pkt[UDP].dport
+
+        key = (ip.src, ip.dst, dport)
+        flows[key].update(len(pkt), dport, str(flags))
+
+        # Evaluar el flujo cada 10 paquetes (y después del paquete 20 para tener data estadística)
+        if flows[key].packets % 10 == 0 and flows[key].packets > 20:
+            evaluate_flow(key, flows[key])
+
+    except Exception:
+        pass
+
+def evaluate_flow(key, flow: FlowStats):
+    global model
+    src, dst, dport = key
+    vec = extract_simple_vector(flow, expected_dim=41)
+
+    # Si no hay modelo entrenado, usar reglas lógicas básicas (Heurística)
+    if model is None:
+        # Regla simple: Si envía >100 paquetes en menos de 2 segs = Posible DoS
+        if flow.packets > 100 and flow.to_features()["duration"] < 2:
+            prob = 0.95
+        else:
+            prob = 0.05
+    else:
+        # Inferencia con modelo DL
+        X = vec.reshape(1, -1, 1) if len(model.input_shape) == 3 else vec.reshape(1, -1)
+        
+        # Ajuste dinámico de input_shape si fue entrenado con una dimensión distinta (ej. CIC-IDS2017)
+        if len(model.input_shape) == 3 and model.input_shape[1] != vec.shape[0]:
+            X = vec.reshape(1, vec.shape[0], 1)
+
+        prob = float(model.predict(X, verbose=0)[0][0])
+
+    # Generación de Alertas
+    if prob > threshold:
+        msg = f"[🚨 ALERTA] {src} -> {dst}:{dport} | Prob Ataque: {prob*100:.1f}% | Pkts:{flow.packets} | {flow.packets/flow.to_features()['duration']:.1f} pkt/s"
+        print(msg)
+        alert_history.append(msg)
+    else:
+        # Imprimir tráfico normal esporádicamente para ver que el script sigue vivo
+        if np.random.rand() < 0.02:
+            print(f"[✅ OK] {src} -> {dst}:{dport} | Tráfico Normal ({prob*100:.1f}% anomalía)")
+
+def monitor_thread():
+    """ Hilo secundario para limpiar memoria y reportar estado """
+    while True:
+        time.sleep(10)
+        print(f"\n--- Estado del Motor: {len(flows)} flujos activos | {len(alert_history)} alertas recientes ---")
+        
+        now = time.time()
+        # Eliminar de la memoria flujos inactivos por más de 60 segundos
+        to_del = [k for k, v in flows.items() if now - v.last_time > 60]
+        for k in to_del:
+            del flows[k]
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="NIDS Realtime DL Engine")
+    parser.add_argument("--model", type=str, default="nids_cnn_lstm.h5", help="Ruta al modelo entrenado (.h5)")
+    parser.add_argument("--iface", type=str, default=None, help="Interfaz de red a escuchar: eth0, wlan0, Wi-Fi")
+    parser.add_argument("--threshold", type=float, default=0.7, help="Umbral de confianza para lanzar alerta (0.0 - 1.0)")
+    args = parser.parse_args()
+
+    threshold = args.threshold
+
+    print("""
+    =========================================
+     🛡️ NIDS REALTIME - Deep Learning 🛡️
+     Capturando tráfico vivo de tu red local
+    =========================================
+    """)
+
+    if not HAS_SCAPY:
+        print("[!] Dependencia crítica faltante.")
+        exit(1)
+
+    if os.path.exists(args.model) and HAS_TF:
+        model = load_model(args.model)
+    else:
+        print(f"[!] Archivo {args.model} no encontrado o TF ausente. Iniciando Modo HEURÍSTICO (sin IA, reglas de fallback)")
+        print(f"    (Para usar IA entrena primero el modelo: python nids_model.py --input UNSW_NB15_dl_split.npz --model both)")
+        model = None
+
+    # Iniciar hilo de monitoreo y limpieza
+    t = threading.Thread(target=monitor_thread, daemon=True)
+    t.start()
+
+    print(f"[+] Iniciando motor de captura... Interfaz: {args.iface or 'automática'}")
+    print("[+] Presiona CTRL+C para detener la monitorización")
+    print("[+] Para probar: Genera tráfico pesado (youtube, descargas, o un scan con nmap)\n")
+
+    try:
+        sniff(prn=packet_callback, store=0, iface=args.iface)
+    except PermissionError:
+        print("\n[!] 🛑 ERROR DE PERMISOS DE RED")
+        print("Para capturar paquetes necesitas privilegios elevados:")
+        print(" -> En Linux/macOS: sudo python nids_realtime.py")
+        print(" -> En Windows: Abre la terminal CMD/PowerShell como Administrador")
+    except KeyboardInterrupt:
+        print("\n[FIN] Monitorización detenida por el usuario.")
+        if alert_history:
+            print("\n📋 Resumen de últimas alertas:")
+            for a in alert_history:
+                print(a)
