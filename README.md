@@ -887,3 +887,24 @@ if __name__ == "__main__":
             print("\n📋 Resumen de últimas alertas:")
             for a in alert_history:
                 print(a)
+
+
+### El Kit Completo (Pipeline estilo SOC)
+
+Ahora tienes el kit completo de 3 scripts operando de la misma manera que en un **SOC (Security Operations Center)** real:
+
+*   **`nids_downloader.py`**: Baja y limpia los datasets (NSL-KDD, UNSW-NB15, CIC-IDS2017).
+*   **`nids_model.py`**: Entrena los modelos de Deep Learning (Autoencoder + CNN-LSTM).
+*   **`nids_realtime.py`**: Captura el tráfico de tu Wi-Fi en vivo y lo clasifica en tiempo real.
+
+---
+
+### ¿Cómo probarlo en tu workstation ahora mismo?
+
+**1. Entrenamiento previo (Si aún no lo has hecho):**
+```bash
+# Descarga los datos y entrena el modelo
+python nids_downloader.py --dataset UNSW-NB15
+python nids_model.py --input UNSW_NB15_dl_split.npz --model both
+
+# El script guardará el modelo entrenado como 'nids_cnn_lstm.h5'
