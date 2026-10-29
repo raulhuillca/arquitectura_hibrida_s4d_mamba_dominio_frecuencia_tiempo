@@ -635,3 +635,9 @@ if __name__ == "__main__":
 *   **Métricas Clave:** El script evalúa e imprime *Precision*, *Recall* y *AUC-ROC*. En el contexto de un NIDS, la métrica más crítica es buscar un **Recall > 98%** (para asegurar que no se dejen pasar ataques reales).
 
 > 💾 **Despliegue:** Al finalizar el entrenamiento, el script guarda el modelo como `nids_cnn_lstm.h5`, dejándolo listo para ser integrado en inferencia en tiempo real con motores de captura como **Zeek** o **Wireshark**.
+
+---
+
+###  Script nids_realtime.py que capture tráfico vivo de tu propia red WiFi y lo clasifique con ese .h5
+
+---
