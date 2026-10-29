@@ -362,3 +362,32 @@ if __name__ == "__main__":
     print("\n[FIN] Todo listo. Archivos *_clean.csv listos para tu modelo Deep Learning.")
 
 --
+---
+
+### ¿Qué hace el script por dentro? (Proceso de Limpieza)
+
+Este script no solo descarga los datos, sino que soluciona los problemas estructurales más comunes de cada dataset para que puedas empezar a entrenar tus modelos de inmediato:
+
+#### 1. NSL-KDD
+*   **Unificación:** Concatena `KDDTrain+.txt` y `KDDTest+.txt`.
+*   **Codificación:** Convierte las 3 variables categóricas de texto (`protocol_type`, `service`, `flag`) en valores numéricos mediante `LabelEncoder`.
+*   **Agrupación de Etiquetas:** Re-clasifica las 39 etiquetas de ataques específicos y minoritarios en las 5 clases macro didácticas estándar: **normal, DoS, Probe, R2L, U2R**.
+
+#### 2. UNSW-NB15
+*   **Unificación:** Une todos los archivos `.csv` del conjunto.
+*   **Limpieza Básica:** Elimina valores infinitos (`inf`) y nulos (`NaN`).
+*   **Codificación:** Transformación numérica de las columnas `proto`, `service` y `state`.
+*   **Estandarización:** Crea la variable objetivo binaria estandarizada `is_attack`.
+
+#### 3. CIC-IDS2017 (El dataset con más ruido)
+Este dataset es el estándar actual, pero su versión raw requiere una limpieza intensiva. El script se encarga de:
+*   **Saneamiento de Datos:** Elimina valores infinitos (`Infinity`) y nulos (`NaN`).
+*   **Deduplicación:** Elimina filas duplicadas exactas.
+*   **Limpieza de Cabeceras:** Elimina espacios en blanco iniciales/finales y normaliza los nombres de las columnas (ej: `Flow Duration` -> `Flow_Duration`).
+*   **Etiquetado Binario:** Crea la variable objetivo estándar `attack_cat` y `is_attack` (0=benigno, 1=ataque).
+*   **Escalado para Deep Learning:** Genera dos versiones del dataset:
+    *   `CIC-IDS2017_clean.csv`: Limpio, pero con valores originales.
+    *   `CIC-IDS2017_clean_scaled.csv`: Totalmente normalizado utilizando `StandardScaler`, **listo para ser ingerido por arquitecturas profundas como LSTM o CNN.**
+
+---
+**Resultado Final:** Para cada dataset procesado, el script realiza una división estratificada (split 80/20 train/test) garantizando la misma proporción de ataques en ambas particiones, y exporta arreglos listos para PyTorch/TensorFlow en formato `.npz`.
