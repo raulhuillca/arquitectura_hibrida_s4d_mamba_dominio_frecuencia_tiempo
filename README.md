@@ -397,3 +397,25 @@ Este dataset es el estándar actual, pero su versión raw requiere una limpieza 
 
 ---
 
+### Script de Modelos de Deep Learning (`nids_model.py`)
+
+Este script consume directamente los archivos `*_dl_split.npz` generados por el paso anterior (`nids_downloader.py`). Implementa dos enfoques de redes neuronales distintos y complementarios:
+
+**Arquitecturas:**
+1. **Autoencoder (Detección de Anomalías):** Detecta ataques *zero-day*. Se entrena únicamente con tráfico benigno para aprender su distribución; cuando ingresa un ataque, no sabe reconstruirlo y el error de reconstrucción se dispara.
+2. **CNN + LSTM (Clasificación Supervisada):** Combina convoluciones 1D para extracción de características espaciales y capas LSTM para características secuenciales. Clasifica ataques conocidos con alta precisión.
+
+**Instalación y Uso:**
+```bash
+pip install tensorflow scikit-learn matplotlib pandas
+
+# Ejecutar solo el Autoencoder
+python nids_model.py --input UNSW_NB15_dl_split.npz --model autoencoder
+
+# Ejecutar solo CNN-LSTM
+python nids_model.py --input CIC_IDS2017_dl_split.npz --model cnn_lstm
+
+# Ejecutar ambos modelos para comparar
+python nids_model.py --input NSL_KDD_dl_split.npz --model both
+
+
