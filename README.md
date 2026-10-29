@@ -652,5 +652,10 @@ Este script captura el tráfico en vivo de tu tarjeta de red, extrae caracterís
 ```bash
 pip install scapy tensorflow pandas scikit-learn
 
+# Linux/macOS
+sudo python nids_realtime.py --model nids_cnn_lstm.h5 --iface wlan0
+
+# Windows (Abrir CMD/PowerShell como Administrador)
+python nids_realtime.py --model nids_cnn_lstm.h5 --iface "Wi-Fi"
 
 
