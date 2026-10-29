@@ -641,3 +641,16 @@ if __name__ == "__main__":
 ###  Script nids_realtime.py que capture tráfico vivo de tu propia red WiFi y lo clasifique con ese .h5
 
 ---
+
+### Script de Detección en Tiempo Real (`nids_realtime.py`)
+
+Este script captura el tráfico en vivo de tu tarjeta de red, extrae características estadísticas en ventanas de tiempo y las pasa por tu modelo entrenado (`nids_cnn_lstm.h5`) para clasificar si es tráfico normal o un ataque en progreso.
+
+> **⚠️ Nota de Producción:** Este script es didáctico y extrae un conjunto de características simplificado. Para un entorno en producción, se recomienda usar **Zeek (Bro)** o **Suricata** enviando logs vía **Kafka** hacia el modelo.
+
+**Requisitos previos:**
+```bash
+pip install scapy tensorflow pandas scikit-learn
+
+
+
