@@ -621,3 +621,17 @@ if __name__ == "__main__":
     print("3. En pipeline de producción: si el Autoencoder lanza una anomalía -> pasas a CNN-LSTM para confirmar/clasificar")
 
 
+### ¿Qué hace cada modelo? (Explicación didáctica)
+
+#### 1. Autoencoder (El portero que solo conoce a la gente buena)
+*   **Entrenamiento Exclusivo:** El código se entrena **SOLO** con tráfico normal (`y == 0`).
+*   **Reconstrucción:** Aprende a comprimir y reconstruir el tráfico benigno con un error muy pequeño.
+*   **Detección de Anomalías:** Cuando llega un ataque (ej. DDoS), el modelo no sabe cómo procesarlo y el error de reconstrucción se dispara (por ejemplo, `MSE = 0.8` vs `0.02` en tráfico normal).
+*   **Umbral Automático:** El script calcula el umbral de detección situándolo en el percentil 95 del tráfico benigno y genera el gráfico `autoencoder_error_hist.png`. Allí visualizarás claramente dos distribuciones separadas (dos "montañas"): normal vs. ataque.
+
+#### 2. CNN + LSTM (El detective especializado)
+*   **Extracción Espacial (`Conv1D`):** Analiza las características internas de cada flujo de red (ej. *"¿Hay muchos paquetes SYN sin su respectivo ACK?"*).
+*   **Análisis Secuencial (`LSTM`):** Observa la secuencia temporal y el comportamiento de los flujos a lo largo del tiempo.
+*   **Métricas Clave:** El script evalúa e imprime *Precision*, *Recall* y *AUC-ROC*. En el contexto de un NIDS, la métrica más crítica es buscar un **Recall > 98%** (para asegurar que no se dejen pasar ataques reales).
+
+> 💾 **Despliegue:** Al finalizar el entrenamiento, el script guarda el modelo como `nids_cnn_lstm.h5`, dejándolo listo para ser integrado en inferencia en tiempo real con motores de captura como **Zeek** o **Wireshark**.
