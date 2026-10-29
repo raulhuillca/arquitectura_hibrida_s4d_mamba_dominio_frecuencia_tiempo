@@ -66,3 +66,9 @@ Son del Canadian Institute for Cybersecurity (CIC) de la Universidad de New Brun
 - **Oficial:** [UNB CIC Datasets - IDS 2018](https://www.unb.ca/cic/datasets/ids-2018.html)
 
 > **📝 Nota de Descarga (UNB):** Para ambos datasets te piden llenar un formulario corto con tu nombre/email institucional y te dan el link de descarga a Drive. Si no quieres esperar, busca *"cic-ids2017"* en Kaggle, donde la comunidad ha subido copias limpias y unificadas en formato CSV.
+
+---
+
+### 💻 Script de Python : Descargar, limpia, codifica y deja los archivos listos para meterlos directo a una red neuronal.
+
+--
