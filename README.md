@@ -12,4 +12,4 @@ Los experimentos se llevaron a cabo utilizando el siguiente entorno computaciona
 - **Stack de Software:** Python 3.12, Qiskit 1.1.1, Qiskit Aer 0.15.1, TenSEAL 0.3.16, Microsoft SEAL, NumPy, Pandas, Scikit-learn, Matplotlib
 - 
 
-### 💻 Hardware y Entorno
+### 💻 data set para evaluacion
