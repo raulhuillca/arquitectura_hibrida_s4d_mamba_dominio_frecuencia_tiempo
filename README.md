@@ -390,3 +390,10 @@ Este dataset es el estándar actual, pero su versión raw requiere una limpieza 
 
 ---
 **Resultado Final:** Para cada dataset procesado, el script realiza una división estratificada (split 80/20 train/test) garantizando la misma proporción de ataques en ambas particiones, y exporta arreglos listos para PyTorch/TensorFlow en formato `.npz`.
+
+---
+
+### 💻 Script, del modelo Autoencoder + LSTM que consuma directamente ese *_dl_split.npz
+
+---
+
