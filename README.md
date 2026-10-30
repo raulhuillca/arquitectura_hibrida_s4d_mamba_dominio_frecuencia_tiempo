@@ -398,7 +398,7 @@ Este dataset es el estándar actual, pero su versión raw requiere una limpieza 
 ---
 
 ---
-$\color{#007BFF}{\textsf{🛠️ (Segundo script) Script, del modelo Autoencoder + LSTM que consuma directamente ese }}$ `*_dl_split.npz`
+$\color{#007BFF}{\textsf{🛠️ (Segundo script) Script, del modelo Autoencoder + LSTM que consuma directamente ese *\\_dl\\_split.npz}}$
 ---
 
 ### Script de Modelos de Deep Learning (`nids_model.py`)
