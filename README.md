@@ -69,7 +69,7 @@ Son del Canadian Institute for Cybersecurity (CIC) de la Universidad de New Brun
 
 ---
 
-### 💻 Script de Python : Descargar, limpia, codifica y deja los archivos listos para meterlos directo a una red neuronal.
+### (Primer scrip) 💻 Script de Python : Descargar, limpia, codifica y deja los archivos listos para meterlos directo a una red neuronal.
 
 ### Script de Descarga y Limpieza Automática (`nids_downloader.py`)
 
