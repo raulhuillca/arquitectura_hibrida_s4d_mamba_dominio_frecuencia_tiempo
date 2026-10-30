@@ -900,7 +900,7 @@ Este es el kit de herramientas que ya tienes listo para operar:
 
 ---
 
-### 🚀 Cómo probarlo en tu casa en Cusco ahora mismo
+### 🚀 Cómo probarlo : 
 
 **1. Prepara los datos y entrena el modelo:**
 ```bash
@@ -909,3 +909,15 @@ python nids_downloader.py --dataset UNSW-NB15
 python nids_model.py --input UNSW_NB15_dl_split.npz --model both
 
 # Esto te generará el archivo del modelo: nids_cnn_lstm.h5
+
+sudo python nids_realtime.py --model nids_cnn_lstm.h5 --iface wlan0
+
+[OK] 192.168.1.15 -> 142.250.0.1:443 | Normal 4.2%
+[ALERTA] 192.168.1.15 -> 192.168.1.1:80 | Prob Ataque: 95.3% | Pkts:120 | 210.5 pkt/s
+
+# Escaneo de puertos silencioso (Probe)
+nmap -sS 127.0.0.1
+
+# O un ataque de inundación (DoS) local
+ping -f 127.0.0.1
+```
