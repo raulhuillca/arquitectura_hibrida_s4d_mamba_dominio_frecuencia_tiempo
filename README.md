@@ -888,3 +888,24 @@ if __name__ == "__main__":
             for a in alert_history:
                 print(a)
 
+```
+
+### 🛠️ Kit Final (Pipeline Completo)
+
+Este es el kit de herramientas que ya tienes listo para operar:
+
+*   **`nids_downloader.py`**: Baja y limpia los datasets (NSL-KDD, UNSW-NB15, CIC-IDS2017).
+*   **`nids_model.py`**: Entrena los modelos (Autoencoder + CNN+LSTM).
+*   **`nids_realtime.py`**: Captura el tráfico de tu red (ej. Wi-Fi) en vivo y lo clasifica.
+
+---
+
+### 🚀 Cómo probarlo en tu casa en Cusco ahora mismo
+
+**1. Prepara los datos y entrena el modelo:**
+```bash
+# Ya entrenaste el modelo antes
+python nids_downloader.py --dataset UNSW-NB15
+python nids_model.py --input UNSW_NB15_dl_split.npz --model both
+
+# Esto te generará el archivo del modelo: nids_cnn_lstm.h5
