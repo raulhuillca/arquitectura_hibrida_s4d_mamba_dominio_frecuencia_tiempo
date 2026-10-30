@@ -393,7 +393,7 @@ Este dataset es el estándar actual, pero su versión raw requiere una limpieza 
 
 ---
 
-### 🛠️ (Segundo scrip) Script, del modelo Autoencoder + LSTM que consuma directamente ese *_dl_split.npz
+#### 🛠️ (Segundo scrip) Script, del modelo Autoencoder + LSTM que consuma directamente ese *_dl_split.npz
 
 ---
 
