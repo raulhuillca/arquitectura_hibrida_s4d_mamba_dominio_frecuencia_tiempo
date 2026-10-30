@@ -397,10 +397,6 @@ Este dataset es el estándar actual, pero su versión raw requiere una limpieza 
 
 ---
 
----
-$\color{#28A745}{\textsf{## 🛠️ (Segundo script) Script, del modelo Autoencoder + LSTM que consuma directamente ese }}$ `*_dl_split.npz`
----
-
 ### Script de Modelos de Deep Learning (`nids_model.py`)
 
 Este script consume directamente los archivos `*_dl_split.npz` generados por el paso anterior (`nids_downloader.py`). Implementa dos enfoques de redes neuronales distintos y complementarios:
